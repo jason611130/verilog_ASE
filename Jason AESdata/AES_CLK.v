@@ -1,3 +1,4 @@
+// module AES(clk,rst,data_vaild,in,key,out,ready,state,internal_data,subbyted,shifted,mixcolumned,addroundkeyed,nround);
 module AES(clk,rst,data_vaild,in,key,out,ready);
     input clk;
     input rst;
@@ -7,6 +8,26 @@ module AES(clk,rst,data_vaild,in,key,out,ready);
     output reg[127:0]out;
     output reg ready;
 
+	// output reg [3:0]state;
+    // output reg [127:0]internal_data;
+    // output reg [127:0]subbyted;
+    // output reg [127:0]shifted;
+    // output reg [127:0]mixcolumned;
+    // output reg [127:0]addroundkeyed;
+    // output reg [4:0]nround;
+
+	
+	reg [3:0]state;
+    reg [127:0]internal_data;
+    reg [127:0]subbyted;
+    reg [127:0]shifted;
+    reg [127:0]mixcolumned;
+    reg [127:0]addroundkeyed;
+    reg [4:0]nround;
+
+	reg final;
+    
+
     parameter IDIE = 3'b000;
     parameter ADD_ROUND_KEY = 3'b001;
     parameter SUB_BYTES = 3'b010;
@@ -15,14 +36,7 @@ module AES(clk,rst,data_vaild,in,key,out,ready);
     parameter FINAL_ROUND = 3'b101;
     parameter OUTPUT_DATA = 3'b110;
 
-    reg [3:0]state;
-    reg [127:0]internal_data;
-    reg [127:0]subbyted;
-    reg [127:0]shifted;
-    reg [127:0]mixcolumned;
-    reg [127:0]addroundkeyed;
-    reg final;
-    reg [4:0]nround;
+    
     wire [1407:0]fullkeys;
 
     integer i,j;
@@ -32,7 +46,9 @@ module AES(clk,rst,data_vaild,in,key,out,ready);
     always@(posedge clk or posedge rst)begin
         if(rst)begin
             nround <= 0;
-            state <= IDIE;         
+            state <= IDIE;       
+            ready <=0;
+            out = 0;  
         end
         else begin
             case(state)
@@ -41,12 +57,13 @@ module AES(clk,rst,data_vaild,in,key,out,ready);
                         internal_data <= in;
                         state <= ADD_ROUND_KEY;
                         nround <= 0 ;
+                        addroundkeyed = fullkeys[1407 -:128];
                     end
                 end
 
                 ADD_ROUND_KEY:begin
                     nround = nround+1;
-                    addroundkeyed = internal_data ^ fullkeys[(128*nround)-1 -:128];
+                    addroundkeyed = internal_data ^ fullkeys[(128*(12-nround))-1 -:128];
                     state <= (nround == 11) ? OUTPUT_DATA : SUB_BYTES; 
                 end
 
@@ -59,36 +76,37 @@ module AES(clk,rst,data_vaild,in,key,out,ready);
                 end
 
                 SHIFT_ROWS:begin
-                    shifted[127 -:8]  =  subbyted[127 -:8];
-                    shifted[95 -:8]   =  subbyted[95-:8];
-                    shifted[63 -:8]   =  subbyted[63-:8];
-                    shifted[31 -:8]   =  subbyted[31-:8];
-
-                    shifted[119 -:8]  =  subbyted[87 -:8];
-                    shifted[87 -:8]   =  subbyted[55 -:8];
-                    shifted[55 -:8]   =  subbyted[23 -:8];
-                    shifted[23 -:8]   =  subbyted[119 -:8];
-
-                    shifted[111 -:8]  =  subbyted[47 -:8];
-                    shifted[79 -:8]   =  subbyted[15 -:8];
-                    shifted[47 -:8]   =  subbyted[111 -:8];
-                    shifted[15 -:8]   =  subbyted[79 -:8];
-
-                    shifted[103 -:8]  =  subbyted[7 -:8];
-                    shifted[71 -:8]   =  subbyted[103 -:8];
-                    shifted[39 -:8]   =  subbyted[71 -:8];
-                    shifted[7 -:8]    =  subbyted[103 -:8];
-                    
+                    shifted[0 +: 8]   = subbyted[32 +: 8];
+                    shifted[32 +: 8]  = subbyted[64 +: 8];
+                    shifted[64 +: 8]  = subbyted[96 +: 8];
+                    shifted[96 +: 8]  = subbyted[0 +: 8];
+    
+                    shifted[8 +: 8]   = subbyted[72 +: 8];
+                    shifted[40 +: 8]  = subbyted[104 +: 8];
+                    shifted[72 +: 8]  = subbyted[8 +: 8];
+                    shifted[104 +: 8] = subbyted[40 +: 8];
+    
+                    shifted[16 +: 8]  = subbyted[112 +: 8];
+                    shifted[48 +: 8]  = subbyted[16 +: 8];
+                    shifted[80 +: 8]  = subbyted[48 +: 8];
+                    shifted[112 +: 8] = subbyted[80 +: 8];
+    
+                    shifted[24 +: 8]  = subbyted[24 +: 8];
+                    shifted[56 +: 8]  = subbyted[56 +: 8];
+                    shifted[88 +: 8]  = subbyted[88 +: 8];
+                    shifted[120 +: 8] = subbyted[120 +: 8];
+                    internal_data = shifted;
                     state <= (nround == 10) ? ADD_ROUND_KEY : MIX_COLUMNS;
                 end
 
                 MIX_COLUMNS:begin
                     for(i=0;i<4;i=i+1)begin:l1
-                        mixcolumned[127-(i*32) -:8]    = mb2(in[127-(i*8) -:8])^mb3(shifted[127-(i*8)-32 -:8])^shifted[127-(i*8)-64 -:8]^shifted[127-(i*8)-96 -:8];
-                        mixcolumned[127-(i*32)-8 -:8] = shifted[127-(i*8) -:8]^mb2(shifted[127-(i*8)-32 -:8])^mb3(shifted[127-(i*8)-64 -:8])^shifted[127-(i*8)-96 -:8];
-                        mixcolumned[127-(i*32)-16 -:8] = shifted[127-(i*8) -:8]^shifted[127-(i*8)-32 -:8]^mb2(shifted[127-(i*8)-64 -:8])^mb3(shifted[127-(i*8)-96 -:8]);
-                        mixcolumned[127-(i*32)-24 -:8] = mb3(shifted[127-(i*8) -:8])^shifted[127-(i*8)-32 -:8]^shifted[127-(i*8)-64 -:8]^mb2(shifted[127-(i*8)-96 -:8]);
+                        mixcolumned[(i * 32 + 24) +: 8] = mb2(shifted[(i * 32 + 24) +: 8]) ^ mb3(shifted[(i * 32 + 16) +: 8]) ^ shifted[(i * 32 + 8) +: 8] ^ shifted[i * 32 +: 8];
+                        mixcolumned[(i * 32 + 16) +: 8] = shifted[(i * 32 + 24) +: 8] ^ mb2(shifted[(i * 32 + 16) +: 8]) ^ mb3(shifted[(i * 32 + 8) +: 8]) ^ shifted[i * 32 +: 8];
+                        mixcolumned[(i * 32 + 8) +: 8] = shifted[(i * 32 + 24) +: 8] ^ shifted[(i * 32 + 16) +: 8] ^ mb2(shifted[(i * 32 + 8) +: 8]) ^ mb3(shifted[i * 32 +: 8]);
+                        mixcolumned[i * 32 +: 8] = mb3(shifted[(i * 32 + 24) +: 8]) ^ shifted[(i * 32 + 16) +: 8] ^ shifted[(i * 32 + 8) +: 8] ^ mb2(shifted[i * 32 +: 8]);
                     end
+                    internal_data = mixcolumned;
                     state <= ADD_ROUND_KEY;
                     
                 end
